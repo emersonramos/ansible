@@ -1,0 +1,15 @@
+---
+- import_tasks: Debian-config.yml
+  when: ansible_os_family == 'Debian'
+
+- name: Install Docker.
+  package:
+    name: docker-ce
+    state: present
+  notify: restart docker
+
+- name: Ensure Docker is started and enabled at boot.
+  service:
+    name: docker
+    state: started
+    enabled: yes
