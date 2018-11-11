@@ -1,0 +1,8 @@
+#ignore hosts
+hosts
+
+#ignore cfg
+*.cfg
+
+#ignore keys directory
+**/key

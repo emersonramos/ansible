@@ -1,0 +1,14 @@
+---
+- hosts: all
+
+  tasks:
+  - name: Install packages
+    apt:
+      name:
+        - vim
+        - curl
+        - apt-transport-https
+        - ca-certificates
+        - python3
+        - ntp
+      state: present
