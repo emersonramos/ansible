@@ -6,3 +6,6 @@ hosts
 
 #ignore keys directory
 **/key
+
+#ignore .retry files
+*.retry
