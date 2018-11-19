@@ -1,4 +1,5 @@
 ---
+#- import_tasks: install-python.yml
 - name: Remove versoes anteriores do Docker
   package:
     name: '{{ item }}'

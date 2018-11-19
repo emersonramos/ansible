@@ -13,3 +13,31 @@
     name: docker
     state: started
     enabled: yes
+
+# Instalacao do Docker-compose
+
+- name: Verifica versao do Docker Compose
+  command: docker-compose --version
+  register: docker_compose_versao_instalada
+  changed_when: false
+  failed_when: false
+
+- name: Verifica versao latest do Docker Compose
+  uri:
+    url: https://api.github.com/repos/docker/compose/releases/latest
+    return_content: yes
+  register: docker_compose_latest
+  
+- name: Remove versao do Docker-Compose se for diferente da versao atualizada  
+  file:
+    path: /usr/local/bin/docker-compose
+    state: absent
+  when: >
+    docker_compose_versao_instalada.stdout is defined and docker_compose_latest.json.tag_name not in docker_compose_versao_instalada.stdout
+
+- name: Instala versao latest do Docker Compose
+  get_url:
+    url: https://github.com/docker/compose/releases/download/{{ docker_compose_latest.json.tag_name }}/docker-compose-Linux-x86_64
+    #    validate_certs: no
+    dest: /usr/local/bin/docker-compose
+    mode: 0755

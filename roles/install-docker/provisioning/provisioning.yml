@@ -1,5 +1,4 @@
 ---
 - hosts: docker-hosts
-
   roles:
     - install-docker
