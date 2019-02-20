@@ -1,0 +1,3 @@
+---
+- hosts: debian-pre
+  gather_facts: False

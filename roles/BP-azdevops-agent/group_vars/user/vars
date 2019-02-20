@@ -1,0 +1,2 @@
+---
+uservstsbuild_pass: "{{ vault_uservstsbuild_pass }}"

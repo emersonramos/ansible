@@ -1,0 +1,4 @@
+---
+- hosts: bp
+  roles:
+    - BP-config

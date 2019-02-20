@@ -1,0 +1,6 @@
+---
+- import_tasks: Debian-config.yml
+  when: ansible_os_family == 'Debian'
+
+- import_tasks: RH-config.yml
+  when: ansible_os_family == 'RedHat' 

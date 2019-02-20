@@ -1,0 +1,8 @@
+---
+# vars file for vsts-agent
+
+proxy:
+  user_proxy: usuario 
+  pass_proxy: senha 
+  http_proxy: 'http://{{ user_proxy }}:{{ pass_proxy }}@IP:8080/'
+  https_proxy: 'http://{{ user_proxy }}:{{ pass_proxy }}@IP:8080/'

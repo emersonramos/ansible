@@ -1,0 +1,25 @@
+---
+#- name: Copia arquivo environment para configuracao do proxy
+#  template:
+#    src: 'templates/debian/environment.j2'
+#    dest: '/etc/environment'
+#    mode: 0644
+
+#- name: Copia arquivo de autenticacao do APT
+#  template:
+#    src: 'templates/debian/apt.conf.j2'
+#    dest: '/etc/apt/apt.conf'
+#    mode: 0644
+
+#instalação do certificado do Firewall
+
+- name: Verifica a existencia do diretoria ca-certificates
+  file: state=directory path=/usr/local/share/ca-certificates
+
+- name: Instalação do certificado do Firewall
+  template:
+    src: 'templates/debian/BRASILPREV-CA.crt.j2'
+    dest: '/usr/local/share/ca-certificates/BRASILPREV-CA.crt'
+
+- name: Update cert index
+  shell: /usr/sbin/update-ca-certificates

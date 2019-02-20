@@ -1,0 +1,21 @@
+---
+- name: Instalação do pacote libselinux-python
+  package:
+    name: libselinux-python
+    state: present
+    update_cache: yes
+  environment: "{{proxy}}"
+  
+#instalação do certificado do Firewall
+
+- name: Verifica a existencia do diretoria ca-certificates
+  file: state=directory path=/etc/pki/ca-trust/source/anchors/
+
+- name: Instalação do certificado do Firewall
+  template:
+    src: 'templates/centos/BRASILPREV-CA.crt.j2'
+    dest: '/etc/pki/ca-trust/source/anchors/BRASILPREV-CA.crt'
+
+- name: Update cert index
+  shell: update-ca-trust extract
+  become: true

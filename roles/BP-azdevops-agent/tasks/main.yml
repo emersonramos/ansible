@@ -1,0 +1,186 @@
+---
+- name: Check if EPEL repo is already configured.
+  stat: path={{ epel_repofile_path }}
+  register: epel_repofile_result
+
+- name: Install EPEL repo.
+  yum:
+    name: "{{ epel_repo_url }}"
+    state: present
+  register: result
+  until: 'result.rc == 0'
+  retries: 5
+  delay: 10
+  when: not epel_repofile_result.stat.exists
+  environment: "{{proxy}}"
+  become: true
+
+- name: Import EPEL GPG key.
+  rpm_key:
+    key: "{{ epel_repo_gpg_key_url }}"
+    state: present
+  when: not epel_repofile_result.stat.exists
+  ignore_errors: "{{ ansible_check_mode }}"
+  environment: "{{proxy}}"
+
+- name: Install centos-release-scl-rh (CentOS only)
+  package:
+    name: centos-release-scl-rh
+    state: present
+  become: true
+  when: ansible_distribution == 'CentOS'
+  environment: "{{proxy}}"
+
+- name: Enables SCL (RHEL only)
+  command: "yum-config-manager --enable rhel-server-rhscl-{{ ansible_distribution_major_version }}-rpms"
+  become: true
+  when: ansible_distribution == 'Red Hat Enterprise Linux'
+
+- name: Install required software for vsts-agent
+  yum:
+    name:
+      - icu
+      - libunwind
+      - rh-git29
+      - python-pip
+    state: latest
+  tags:
+    - pkg
+  environment: "{{proxy}}"
+  become: true
+
+- name: Pip install pexpect (we need a new-enough version that isn't packaged in redhat 7.x
+  pip:
+    name:
+      - pexpect
+    state: present
+  tags:
+    - pkg
+    - pexpect
+  environment: "{{proxy}}"
+  become: true
+
+- name: Create a login user
+  user:
+    name: "{{vsts_agent_user}}"
+    #password: ""
+    groups: # Empty by default, here we give it some groups
+       - wheel
+    state: present
+    shell: /bin/bash       # Defaults to /bin/bash
+    system: no             # Defaults to no
+    create_home: yes        # Defaults to yes
+    home: /home/{{vsts_agent_user}}  # Defaults to /home/<username>
+  become: true
+
+- name: Create directories
+  file:
+    state: directory
+    path: "{{item}}"
+    owner: "{{vsts_agent_user}}"
+    group: "{{vsts_agent_user}}"
+    mode: 0755
+  with_items:
+    - "{{vsts_agentfolder}}"
+    - "{{vsts_workfolder}}"
+  become: true  
+  tags:
+    - homedir
+
+- name: Fetch latest downloadurl if variable vsts_server_url is not defined
+  shell: "curl -s https://api.github.com/repos/Microsoft/vsts-agent/releases/latest | jq -r .assets[].browser_download_url | grep rhel"
+  delegate_to: localhost
+  register: githubapi_downloadurl_output
+  when: vsts_agent_fullurl is not defined
+  tags:
+    - fetch
+  environment: "{{proxy}}"
+
+- name: Register githubapi_downloadurl_output as fact in variable vsts_agent_fullurl
+  set_fact:
+    vsts_agent_fullurl: "{{ githubapi_downloadurl_output.stdout_lines[0] }}"
+  when: vsts_agent_fullurl is not defined
+  tags:
+    - fetch
+
+- name: Download and unarchive
+  unarchive:
+    dest: "{{vsts_agentfolder}}"
+    src: "{{vsts_agent_fullurl}}"
+    remote_src: true
+    owner: "{{vsts_agent_user}}"
+    group: "{{vsts_agent_user}}"
+    creates: "{{vsts_agentfolder}}/config.sh"
+  environment: "{{proxy}}"
+  become: true
+  tags:
+    - fetch
+    - unzip
+
+- name: Configure vsts-agent
+  command: "./config.sh --unattended --acceptteeeula --url {{vsts_server_url}} --auth PAT --token {{vsts_accesstoken}} --pool '{{vsts_poolname}}' --agent {{vsts_agent_name}} --work {{vsts_workfolder}} --replace"
+  args:
+    chdir: "{{vsts_agentfolder}}"
+    creates: "{{vsts_agentfolder}}/.agent"
+  become_user: "{{vsts_agent_user}}"
+  when: dryrun is not defined
+  tags:
+    - config
+  environment: "{{proxy}}"
+  become: true
+
+- name: Initial installation of systemd service files and generation of runsvc.sh
+  command: "./svc.sh install"
+  args:
+    chdir: "{{vsts_agentfolder}}"
+    creates: "/etc/systemd/system/vsts.agent.{{ vsts_accountname }}.{{ vsts_agent_name }}.service"
+  become: true
+  when: dryrun is not defined
+  tags:
+    - config
+    - service
+  environment: "{{proxy}}"
+
+- name: Extend runsvc.sh with addition configuration
+  lineinfile:
+    dest: "{{vsts_agentfolder}}/runsvc.sh"
+    regexp: "{{ item.regex }}"
+    insertafter: '^# insert anything to setup env when running as a service'
+    line: "{{ item.line }}"
+  with_items: "{{ runsvc_regex_fileline }}"
+  tags:
+    - config
+    - service
+  when: (runsvc_regex_fileline is defined ) and
+        (dryrun is not defined)
+
+
+- name: Enable and start vsts-agent service
+  service:
+    name: "vsts.agent.{{ vsts_accountname }}.{{ vsts_agent_name }}"
+    enabled: yes
+    state: started
+  become: true
+  when: dryrun is not defined
+  tags:
+    - service
+
+- name: Unconfigure vsts-agent - remove service
+  command: "./svc.sh uninstall"
+  args:
+    chdir: "{{vsts_agentfolder}}"
+    removes: "/etc/systemd/system/vsts.agent.{{ vsts_accountname }}.{{ vsts_agent_name }}.service"
+  when: vsts_remove|bool
+  become: true
+  tags:
+    - service
+    - unconfig
+
+- name: Unconfigure vsts-agent
+  command: "./config.sh remove --unattended --auth PAT --token {{vsts_accesstoken}}"
+  args:
+    chdir: "{{vsts_agentfolder}}"
+  become_user: "{{vsts_agent_user}}"
+  when: vsts_remove|bool
+  tags:
+    - unconfig
